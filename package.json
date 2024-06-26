@@ -1,0 +1,12 @@
+{
+  "name": "mikro-orm-audit-log",
+  "version": "0.0.0",
+  "private": true,
+  "main": "index.js",
+  "keywords": [],
+  "author": "Brett Striker <StrikeForceZero@gmail.com>",
+  "description": "Enables entity change tracking and audit logs for backends using mikro-orm",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}

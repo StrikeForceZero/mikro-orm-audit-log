@@ -1,0 +1,6 @@
+# Enforce LF line endings for all text files
+* text eol=lf
+
+# Special handling for pnpm-lock.yaml
+pnpm-lock.yaml -diff -merge
+pnpm-lock.yaml linguist-generated=true
