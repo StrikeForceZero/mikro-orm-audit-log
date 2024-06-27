@@ -97,20 +97,20 @@ function Redacted<T>(_value: T): IChangeValue<T> {
 
 export class ChangeDataEntry<V> {
   constructor(
-    readonly next?: IChangeValue<V>,
-    readonly prev?: IChangeValue<V>,
+    public readonly next?: IChangeValue<V>,
+    public readonly prev?: IChangeValue<V>,
   ) {
   }
 }
 
 export class ChangeData<T> {
-  changes?: {
+  data: {
     [K in EntityKey<T>]?: ChangeDataEntry<EntityData<T>[K]>;
-  };
+  } = {};
 }
 
 @Entity({ abstract: true })
-export class AuditLog<T, U = undefined> {
+export class AuditLog<T extends object, U extends object = Record<never, never>> {
   @PrimaryKey()
   id!: UuidType;
 
@@ -120,7 +120,7 @@ export class AuditLog<T, U = undefined> {
 
   @Index()
   @Property({ type: "jsonb" })
-  entityId!: Primary<T> | null;
+  entityId!: Record<string, unknown> | null;
 
   @Index()
   @Enum()
@@ -133,16 +133,17 @@ export class AuditLog<T, U = undefined> {
   timestamp: Date = new Date();
 
   @ManyToOne()
-  user?: U;
+  user?: Reference<U>;
 
-  static from_change_set<T extends object, U = undefined>(changeSet: ChangeSet<T>): AuditLog<T, U> {
+  static from_change_set<T extends object, U extends object = Record<never, never>>(changeSet: ChangeSet<T>): AuditLog<T, U> {
     const prev = changeSet.originalEntity;
     const next = changeSet.payload;
     const entry = new AuditLog<T, U>();
     entry.changeType = ChangeType.from_change_set_type(changeSet.type);
     entry.entityName = changeSet.name;
-    entry.entityId = changeSet.getPrimaryKey(true);
-    entry.changes = {};
+    // TODO: proper typings possible?
+    entry.entityId = changeSet.getPrimaryKey(true) as Record<string, unknown>;
+    entry.changes = new ChangeData();
     for (const prop in next) {
       const key = prop as EntityKey<T>;
       const prevValue = prev?.[key];
@@ -161,8 +162,7 @@ export class AuditLog<T, U = undefined> {
             }
           }
         )();
-        // TODO: proper typings possible?
-        entry.changes[key] = new ChangeDataEntry(...changeEntryValueTuple) as ChangeData<T>[EntityKey<T>];
+        entry.changes.data[key] = new ChangeDataEntry(...changeEntryValueTuple);
       }
     }
     return entry;
