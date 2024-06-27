@@ -16,6 +16,8 @@ import {
   EntityData,
   EntityKey,
   EntityDictionary,
+  EntityManager,
+  Reference,
 } from "@mikro-orm/core";
 
 export enum ChangeType {
@@ -134,6 +136,135 @@ export class AuditLog<T extends object, U extends object = Record<never, never>>
 
   @ManyToOne()
   user?: Reference<U>;
+
+  entityPrimaryKey(): Primary<T> {
+    return this.entityId as Primary<T>;
+  }
+
+  async tryLoadLatestVersionOfEntity(em: EntityManager): Promise<T | undefined> {
+    return await em.getRepository<T>(this.entityName).findOne({
+      // TODO: proper types?
+      ...this.entityPrimaryKey() as object,
+    }) as T | undefined;
+  }
+
+  /**
+   * Builds the entity from all AuditLog entries prior
+   * @param em
+   */
+  async fromUpToHere(em: EntityManager): Promise<T> {
+    const entries = await em.getRepository(AuditLog<T, U>).findAll({
+      where: {
+        entityName: this.entityName,
+        entityId: this.entityId,
+        timestamp: { $lte: this.timestamp },
+      },
+      orderBy: {
+        [AuditLog.name]: {
+          timestamp: 'asc',
+        },
+      },
+    });
+    const entity: Record<string, unknown> = {};
+    for (const entry of entries) {
+      const data = entry.changes.data;
+      for (const key in data) {
+        const change = data[key as keyof typeof data];
+        if (change === undefined) {
+          continue;
+        }
+        if (change.next == undefined) {
+          continue;
+        }
+        if (change.next.marker === ChangeValueMarker.Redacted) {
+          continue;
+        }
+        // TODO: consequences?
+        entity[key] = change.next.value as T[keyof T];
+      }
+    }
+    return em.getRepository<T>(this.entityName).create(entity as T);
+  }
+
+  /**
+   * Builds the entity from undoing all AuditLog entries after
+   * @param em
+   */
+  async fromDownToHere(em: EntityManager): Promise<T> {
+    const entries = await em.getRepository(AuditLog<T, U>).findAll({
+      where: {
+        entityName: this.entityName,
+        entityId: this.entityId,
+        timestamp: { $gte: this.timestamp },
+      },
+      orderBy: {
+        [AuditLog.name]: {
+          timestamp: 'dsc',
+        },
+      },
+    });
+    const entity = await this.tryLoadLatestVersionOfEntity(em) ?? {} as T;
+    for (const entry of entries) {
+      const data = entry.changes.data;
+      for (const key in data) {
+        const change = data[key as keyof typeof data];
+        if (change === undefined) {
+          continue;
+        }
+        if (change.next == undefined) {
+          continue;
+        }
+        if (change.next.marker === ChangeValueMarker.Redacted) {
+          continue;
+        }
+        // TODO: consequences?
+        entity[key as keyof T] = change.next.value as T[keyof T];
+      }
+    }
+    return em.getRepository<T>(this.entityName).create(entity as T);
+
+  }
+
+  /**
+   * Reverts changes in this entry if they match the latest value
+   * @param em
+   */
+  async undoUnchanged(em: EntityManager): Promise<T | undefined> {
+    const entries = await em.getRepository(AuditLog<T, U>).findAll({
+      where: {
+        entityName: this.entityName,
+        entityId: this.entityId,
+        timestamp: { $gte: this.timestamp },
+      },
+      orderBy: {
+        [AuditLog.name]: {
+          timestamp: 'asc',
+        },
+      },
+      limit: 1,
+    });
+    const entity = await this.tryLoadLatestVersionOfEntity(em) as T;
+    if (entity === undefined) {
+      return undefined;
+    }
+    if (entries.length !== 1) {
+      throw new Error("expected 1 entry");
+    }
+    for (const entry of entries) {
+      for (const key in entry.changes.data) {
+        const change = entry.changes.data[key];
+        if (change === undefined) {
+          continue;
+        }
+        if (change.next?.marker === ChangeValueMarker.Value) {
+          if (change.next.value === entity[key as keyof T]) {
+            entity[key as keyof T] = change.prev?.value as T[keyof T];
+          }
+        }
+      }
+    }
+    return entity;
+  }
 
   static from_change_set<T extends object, U extends object = Record<never, never>>(changeSet: ChangeSet<T>): AuditLog<T, U> {
     const prev = changeSet.originalEntity;
