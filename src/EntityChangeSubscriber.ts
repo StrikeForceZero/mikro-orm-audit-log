@@ -2,7 +2,6 @@ import { AuditLog } from "@/AuditLog";
 import { Config } from "@/Config";
 import {
   EntityName,
-  EventArgs,
   EventSubscriber,
   FlushEventArgs,
   ref,

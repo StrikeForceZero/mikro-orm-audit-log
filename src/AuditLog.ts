@@ -145,7 +145,7 @@ export class AuditLog<T extends object, U extends object = Record<never, never>>
       },
       orderBy: {
         [AuditLog.name]: {
-          timestamp: 'asc',
+          timestamp: "asc",
         },
       },
     });
@@ -183,7 +183,7 @@ export class AuditLog<T extends object, U extends object = Record<never, never>>
       },
       orderBy: {
         [AuditLog.name]: {
-          timestamp: 'dsc',
+          timestamp: "dsc",
         },
       },
     });
@@ -222,7 +222,7 @@ export class AuditLog<T extends object, U extends object = Record<never, never>>
       },
       orderBy: {
         [AuditLog.name]: {
-          timestamp: 'asc',
+          timestamp: "asc",
         },
       },
       limit: 1,
