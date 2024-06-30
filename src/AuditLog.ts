@@ -119,7 +119,7 @@ export class AuditLog<T extends object, U extends object = Record<never, never>>
   timestamp: Date = new Date();
 
   @MikroOrm.ManyToOne()
-  user?: MikroOrm.Reference<U>;
+  user?: MikroOrm.Ref<U>;
 
   entityPrimaryKey(): MikroOrm.Primary<T> {
     return this.entityId as MikroOrm.Primary<T>;
