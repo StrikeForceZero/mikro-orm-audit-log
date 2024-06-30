@@ -4,6 +4,7 @@ import {
   EntityName,
   EventSubscriber,
   FlushEventArgs,
+  Ref,
   ref,
   RequestContext,
 } from "@mikro-orm/core";
@@ -29,7 +30,8 @@ export class EntityChangeSubscriber<U extends object = Record<never, never>> imp
         if (context == undefined) {
           throw new Error("failed to get context");
         }
-        entry.user = ref(await getUser(context));
+        // TODO: proper typings?
+        entry.user = ref(await getUser(context)) as unknown as U extends Record<never, never> ? never : Ref<U>;
       }
       event.em.persist(entry);
       hasChanges = true;

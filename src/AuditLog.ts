@@ -119,7 +119,7 @@ export class AuditLog<T extends object, U extends object = Record<never, never>>
   timestamp: Date = new Date();
 
   @MikroOrm.ManyToOne()
-  user?: MikroOrm.Ref<U>;
+  user?: U extends Record<never, never> ? never : MikroOrm.Ref<U>;
 
   static from_change_set<T extends object, U extends object = Record<never, never>>(changeSet: MikroOrm.ChangeSet<T>): AuditLog<T, U> {
     const prev = changeSet.originalEntity;
