@@ -2,23 +2,7 @@ import {
   getAuditIgnoreMetadata,
   getAuditRedactMetadata,
 } from "@/decorator";
-import {
-  ChangeSet,
-  ChangeSetType,
-  Entity,
-  Enum,
-  Index,
-  ManyToOne,
-  PrimaryKey,
-  Property,
-  UuidType,
-  Primary,
-  EntityData,
-  EntityKey,
-  EntityDictionary,
-  EntityManager,
-  Reference,
-} from "@mikro-orm/core";
+import * as MikroOrm from "@mikro-orm/core";
 
 export enum ChangeType {
   CREATE = "create",
@@ -27,15 +11,15 @@ export enum ChangeType {
 }
 
 export namespace ChangeType {
-  export function from_change_set_type(changeSetType: ChangeSetType): ChangeType {
+  export function from_change_set_type(changeSetType: MikroOrm.ChangeSetType): ChangeType {
     switch (changeSetType) {
-      case ChangeSetType.CREATE:
+      case MikroOrm.ChangeSetType.CREATE:
         return ChangeType.CREATE;
-      case ChangeSetType.UPDATE:
-      case ChangeSetType.UPDATE_EARLY:
+      case MikroOrm.ChangeSetType.UPDATE:
+      case MikroOrm.ChangeSetType.UPDATE_EARLY:
         return ChangeType.UPDATE;
-      case ChangeSetType.DELETE:
-      case ChangeSetType.DELETE_EARLY:
+      case MikroOrm.ChangeSetType.DELETE:
+      case MikroOrm.ChangeSetType.DELETE_EARLY:
         return ChangeType.DELETE;
       default:
         throw new Error(`unknown ChangeSetType type: ${changeSetType}`);
@@ -107,41 +91,41 @@ export class ChangeDataEntry<V> {
 
 export class ChangeData<T> {
   data: {
-    [K in EntityKey<T>]?: ChangeDataEntry<EntityData<T>[K]>;
+    [K in MikroOrm.EntityKey<T>]?: ChangeDataEntry<MikroOrm.EntityData<T>[K]>;
   } = {};
 }
 
-@Entity({ abstract: true })
+@MikroOrm.Entity({ abstract: true })
 export class AuditLog<T extends object, U extends object = Record<never, never>> {
-  @PrimaryKey()
-  id!: UuidType;
+  @MikroOrm.PrimaryKey()
+  id!: MikroOrm.UuidType;
 
-  @Index()
-  @Property()
+  @MikroOrm.Index()
+  @MikroOrm.Property()
   entityName!: string;
 
-  @Index()
-  @Property({ type: "jsonb" })
+  @MikroOrm.Index()
+  @MikroOrm.Property({ type: "jsonb" })
   entityId!: Record<string, unknown> | null;
 
-  @Index()
-  @Enum()
+  @MikroOrm.Index()
+  @MikroOrm.Enum()
   changeType!: ChangeType;
 
-  @Property({ type: "jsonb" })
+  @MikroOrm.Property({ type: "jsonb" })
   changes!: ChangeData<T>;
 
-  @Property()
+  @MikroOrm.Property()
   timestamp: Date = new Date();
 
-  @ManyToOne()
-  user?: Reference<U>;
+  @MikroOrm.ManyToOne()
+  user?: MikroOrm.Reference<U>;
 
-  entityPrimaryKey(): Primary<T> {
-    return this.entityId as Primary<T>;
+  entityPrimaryKey(): MikroOrm.Primary<T> {
+    return this.entityId as MikroOrm.Primary<T>;
   }
 
-  async tryLoadLatestVersionOfEntity(em: EntityManager): Promise<T | undefined> {
+  async tryLoadLatestVersionOfEntity(em: MikroOrm.EntityManager): Promise<T | undefined> {
     return await em.getRepository<T>(this.entityName).findOne({
       // TODO: proper types?
       ...this.entityPrimaryKey() as object,
@@ -152,7 +136,7 @@ export class AuditLog<T extends object, U extends object = Record<never, never>>
    * Builds the entity from all AuditLog entries prior
    * @param em
    */
-  async fromUpToHere(em: EntityManager): Promise<T> {
+  async fromUpToHere(em: MikroOrm.EntityManager): Promise<T> {
     const entries = await em.getRepository(AuditLog<T, U>).findAll({
       where: {
         entityName: this.entityName,
@@ -190,7 +174,7 @@ export class AuditLog<T extends object, U extends object = Record<never, never>>
    * Builds the entity from undoing all AuditLog entries after
    * @param em
    */
-  async fromDownToHere(em: EntityManager): Promise<T> {
+  async fromDownToHere(em: MikroOrm.EntityManager): Promise<T> {
     const entries = await em.getRepository(AuditLog<T, U>).findAll({
       where: {
         entityName: this.entityName,
@@ -229,7 +213,7 @@ export class AuditLog<T extends object, U extends object = Record<never, never>>
    * Reverts changes in this entry if they match the latest value
    * @param em
    */
-  async undoUnchanged(em: EntityManager): Promise<T | undefined> {
+  async undoUnchanged(em: MikroOrm.EntityManager): Promise<T | undefined> {
     const entries = await em.getRepository(AuditLog<T, U>).findAll({
       where: {
         entityName: this.entityName,
@@ -266,7 +250,7 @@ export class AuditLog<T extends object, U extends object = Record<never, never>>
     return entity;
   }
 
-  static from_change_set<T extends object, U extends object = Record<never, never>>(changeSet: ChangeSet<T>): AuditLog<T, U> {
+  static from_change_set<T extends object, U extends object = Record<never, never>>(changeSet: MikroOrm.ChangeSet<T>): AuditLog<T, U> {
     const prev = changeSet.originalEntity;
     const next = changeSet.payload;
     const entry = new AuditLog<T, U>();
@@ -276,7 +260,7 @@ export class AuditLog<T extends object, U extends object = Record<never, never>>
     entry.entityId = changeSet.getPrimaryKey(true) as Record<string, unknown>;
     entry.changes = new ChangeData();
     for (const prop in next) {
-      const key = prop as EntityKey<T>;
+      const key = prop as MikroOrm.EntityKey<T>;
       const prevValue = prev?.[key];
       const nextValue = next[key];
       if (prevValue !== nextValue) {
