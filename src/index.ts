@@ -1,5 +1,5 @@
 import { Config } from "@/Config";
 
-function init<U = undefined>(config: Config<U>) {
+function init<U extends object = Record<never, never>>(config: Config<U>) {
 
 }

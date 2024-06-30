@@ -8,7 +8,7 @@ import {
   RequestContext,
 } from "@mikro-orm/core";
 
-export class EntityChangeSubscriber<U = undefined> implements EventSubscriber<unknown> {
+export class EntityChangeSubscriber<U extends object = Record<never, never>> implements EventSubscriber<unknown> {
   constructor(
     private readonly config: Config<U>,
     private readonly entityNames: EntityName<unknown>[]
