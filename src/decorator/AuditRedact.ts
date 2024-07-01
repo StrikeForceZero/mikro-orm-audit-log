@@ -9,7 +9,7 @@ export function AuditRedact() {
       Reflect.defineMetadata(KEY, true, target, propertyKey);
     } else {
       // If applied to a class
-      Reflect.defineMetadata(KEY, true, target);
+      throw new Error("@AuditRedact() can only be used on properties or methods");
     }
   };
 }
