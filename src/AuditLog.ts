@@ -95,80 +95,106 @@ export class ChangeData<T> {
   } = {};
 }
 
-export interface IAuditLog<T, U> {
+type HasUserRef<U> = U extends never ? {} : { user?: MikroOrm.Ref<U> };
+
+export interface IAuditLogBase<T extends object, U = never> {
   id: MikroOrm.UuidType,
   entityName: string,
   entityId: Record<string, unknown> | null,
   changeType: ChangeType,
   changes: ChangeData<T>,
   timestamp: Date,
-  user?: MikroOrm.Ref<U>,
+  user?: MikroOrm.Ref<U extends never ? never : U>,
+  expectsUser(this: IAuditLogBase<T, U>): this is IAuditLogBase<T, Exclude<U, never>>;
 }
 
-export interface IAuditLogStatic<U> {
-  new<T>(): IAuditLog<T, U>;
-  from_change_set<T extends object>(changeSet: MikroOrm.ChangeSet<T>): IAuditLog<T, U>;
+export interface IAuditLogStatic<U = never> {
+  new<T extends object>(): IAuditLogBase<T, U>;
+  from_change_set<T extends object, U2 = U>(changeSet: MikroOrm.ChangeSet<T>): IAuditLogBase<T, U2>;
 }
 
-export function createAuditLogCls<U>(userCls: { new(): U }): IAuditLogStatic<U> {
-  @MikroOrm.Entity()
-  class AuditLog<T extends object> implements IAuditLog<T, U> {
-    @MikroOrm.PrimaryKey()
-    id!: MikroOrm.UuidType;
+@MikroOrm.Entity({ abstract: true })
+abstract class AuditLogBase<T extends object, U = never> implements IAuditLogBase<T, U> {
+  @MikroOrm.PrimaryKey()
+  id!: MikroOrm.UuidType;
 
-    @MikroOrm.Index()
-    @MikroOrm.Property()
-    entityName!: string;
+  @MikroOrm.Index()
+  @MikroOrm.Property()
+  entityName!: string;
 
-    @MikroOrm.Index()
-    @MikroOrm.Property({ type: "jsonb" })
-    entityId!: Record<string, unknown> | null;
+  @MikroOrm.Index()
+  @MikroOrm.Property({ type: "jsonb" })
+  entityId!: Record<string, unknown> | null;
 
-    @MikroOrm.Index()
-    @MikroOrm.Enum()
-    changeType!: ChangeType;
+  @MikroOrm.Index()
+  @MikroOrm.Enum()
+  changeType!: ChangeType;
 
-    @MikroOrm.Property({ type: "jsonb" })
-    changes!: ChangeData<T>;
+  @MikroOrm.Property({ type: "jsonb" })
+  changes!: ChangeData<T>;
 
-    @MikroOrm.Property()
-    timestamp: Date = new Date();
+  @MikroOrm.Property()
+  timestamp: Date = new Date();
 
-    @MikroOrm.ManyToOne(userCls.name)
-    user?: MikroOrm.Ref<U>;
-
-    static from_change_set<T extends object>(changeSet: MikroOrm.ChangeSet<T>): AuditLog<T> {
-      const prev = changeSet.originalEntity;
-      const next = changeSet.payload;
-      const entry = new AuditLog<T>();
-      entry.changeType = ChangeType.from_change_set_type(changeSet.type);
-      entry.entityName = changeSet.name;
-      // TODO: proper typings possible?
-      entry.entityId = changeSet.getPrimaryKey(true) as Record<string, unknown>;
-      entry.changes = new ChangeData();
-      for (const prop in next) {
-        const key = prop as MikroOrm.EntityKey<T>;
-        const prevValue = prev?.[key];
-        const nextValue = next[key];
-        if (prevValue !== nextValue) {
-          if (getAuditIgnoreMetadata(changeSet.entity, key)) {
-            continue;
-          }
-          let changeEntryValueTuple: [IChangeValue<typeof prevValue>, IChangeValue<typeof nextValue>] = (
-            () => {
-              if (getAuditRedactMetadata(changeSet.entity, key)) {
-                return [Redacted(prevValue), Redacted(nextValue)];
-              }
-              else {
-                return [Value(prevValue), Value(nextValue)];
-              }
-            }
-          )();
-          entry.changes.data[key] = new ChangeDataEntry(...changeEntryValueTuple);
-        }
-      }
-      return entry;
-    }
+  expectsUser(this: IAuditLogBase<T, U>):  this is IAuditLogBase<T, Exclude<U, never>> {
+    return false;
   }
-  return AuditLog;
+
+  static _from_change_set<T extends object, U>(Alc: IAuditLogStatic<U>, changeSet: MikroOrm.ChangeSet<T>): IAuditLogBase<T, U> {
+    const prev = changeSet.originalEntity;
+    const next = changeSet.payload;
+    const entry = new Alc<T>();
+    entry.changeType = ChangeType.from_change_set_type(changeSet.type);
+    entry.entityName = changeSet.name;
+    // TODO: proper typings possible?
+    entry.entityId = changeSet.getPrimaryKey(true) as Record<string, unknown>;
+    entry.changes = new ChangeData();
+    for (const prop in next) {
+      const key = prop as MikroOrm.EntityKey<T>;
+      const prevValue = prev?.[key];
+      const nextValue = next[key];
+      if (prevValue !== nextValue) {
+        if (getAuditIgnoreMetadata(changeSet.entity, key)) {
+          continue;
+        }
+        let changeEntryValueTuple: [IChangeValue<typeof prevValue>, IChangeValue<typeof nextValue>] = (
+          () => {
+            if (getAuditRedactMetadata(changeSet.entity, key)) {
+              return [Redacted(prevValue), Redacted(nextValue)];
+            }
+            else {
+              return [Value(prevValue), Value(nextValue)];
+            }
+          }
+        )();
+        entry.changes.data[key] = new ChangeDataEntry(...changeEntryValueTuple);
+      }
+    }
+    return entry;
+  }
 }
+
+export class AuditLogWithUser<T extends object, U> extends AuditLogBase<T> {
+  @MikroOrm.ManyToOne()
+  user?: MikroOrm.Ref<U>;
+
+  override expectsUser<U>(this: IAuditLogBase<T, U>):  this is IAuditLogBase<T, Exclude<U, never>> {
+    return true;
+  }
+
+  static from_change_set<T extends object, U>(changeSet: MikroOrm.ChangeSet<T>): IAuditLogBase<T, U> {
+    return super._from_change_set<T, U>(AuditLogWithUser<T, U> as IAuditLogStatic<U>, changeSet);
+  }
+}
+
+export class AuditLogWithoutUser<T extends object> extends AuditLogBase<T> {
+  override expectsUser<U>(this: IAuditLogBase<T, U>):  this is IAuditLogBase<T, Exclude<U, never>> {
+    return false;
+  }
+
+  static from_change_set<T extends object, U extends never = never>(changeSet: MikroOrm.ChangeSet<T>): IAuditLogBase<T, U> {
+    return super._from_change_set<T, U>(AuditLogWithoutUser<T> as IAuditLogStatic<U>, changeSet);
+  }
+}
+
+export type AuditLog<U> = IAuditLogStatic<U>;

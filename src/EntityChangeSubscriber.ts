@@ -1,10 +1,13 @@
-import { Config } from "@/Config";
+import {
+  Config,
+  UserClass,
+} from "@/Config";
 import { GlobalStorage } from "@/decorator/Audit";
 import {
   EntityName,
   EventSubscriber,
   FlushEventArgs,
-  ref,
+  Ref,
   RequestContext,
 } from "@mikro-orm/core";
 
@@ -22,16 +25,24 @@ export class EntityChangeSubscriber<U> implements EventSubscriber<unknown> {
   async afterFlush(event: FlushEventArgs): Promise<void> {
     let hasChanges = false;
     for (const changeSet of event.uow.getChangeSets()) {
-      if (changeSet.name === this.config.auditLogCls.name) {
+      if (changeSet.name === this.config.auditLogClass.name) {
         continue;
       }
-      const entry = this.config.auditLogCls.from_change_set<Partial<unknown>>(changeSet);
-      const context = RequestContext.currentRequestContext();
-      if (context == undefined) {
-        throw new Error("failed to get context");
+
+      const entry = this.config.auditLogClass.from_change_set<Partial<unknown>, InstanceType<typeof this.config.userClass>>(changeSet);
+
+      if (this.config.hasUserClass() && entry.expectsUser()) {
+        if (this.config.getUser) {
+          const context = RequestContext.currentRequestContext();
+          if (context == undefined) {
+            throw new Error("failed to get context");
+          }
+
+          // TODO: why is entry not getting type narrowed?
+          entry.user = await this.config.getUser(context) as (InstanceType<UserClass<U>> extends never ? never : Ref<InstanceType<UserClass<U>>>) & Ref<InstanceType<UserClass<U>>>;
+
+        }
       }
-      const getUser = this.config.getUser ?? (_ => ref(new this.config.userCls()));
-      entry.user = await getUser(context);
       event.em.persist(entry);
       hasChanges = true;
     }
