@@ -17,7 +17,4 @@ export class Config<U extends object = Record<never, never>> {
       throw new Error("useJsonB = false not yet supported");
     }
   }
-  protected getInternalEntities(): unknown[] {
-    return [AuditLog];
-  }
 }
