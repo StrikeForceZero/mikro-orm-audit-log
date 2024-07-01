@@ -95,62 +95,80 @@ export class ChangeData<T> {
   } = {};
 }
 
-@MikroOrm.Entity({ abstract: true })
-export class AuditLog<T extends object, U extends object = Record<never, never>> {
-  @MikroOrm.PrimaryKey()
-  id!: MikroOrm.UuidType;
+export interface IAuditLog<T, U> {
+  id: MikroOrm.UuidType,
+  entityName: string,
+  entityId: Record<string, unknown> | null,
+  changeType: ChangeType,
+  changes: ChangeData<T>,
+  timestamp: Date,
+  user?: MikroOrm.Ref<U>,
+}
 
-  @MikroOrm.Index()
-  @MikroOrm.Property()
-  entityName!: string;
+export interface IAuditLogStatic<U> {
+  new<T>(): IAuditLog<T, U>;
+  from_change_set<T extends object>(changeSet: MikroOrm.ChangeSet<T>): IAuditLog<T, U>;
+}
 
-  @MikroOrm.Index()
-  @MikroOrm.Property({ type: "jsonb" })
-  entityId!: Record<string, unknown> | null;
+export function createAuditLogCls<U>(userCls: { new(): U }): IAuditLogStatic<U> {
+  @MikroOrm.Entity()
+  class AuditLog<T extends object> implements IAuditLog<T, U> {
+    @MikroOrm.PrimaryKey()
+    id!: MikroOrm.UuidType;
 
-  @MikroOrm.Index()
-  @MikroOrm.Enum()
-  changeType!: ChangeType;
+    @MikroOrm.Index()
+    @MikroOrm.Property()
+    entityName!: string;
 
-  @MikroOrm.Property({ type: "jsonb" })
-  changes!: ChangeData<T>;
+    @MikroOrm.Index()
+    @MikroOrm.Property({ type: "jsonb" })
+    entityId!: Record<string, unknown> | null;
 
-  @MikroOrm.Property()
-  timestamp: Date = new Date();
+    @MikroOrm.Index()
+    @MikroOrm.Enum()
+    changeType!: ChangeType;
 
-  @MikroOrm.ManyToOne()
-  user?: U extends Record<never, never> ? never : MikroOrm.Ref<U>;
+    @MikroOrm.Property({ type: "jsonb" })
+    changes!: ChangeData<T>;
 
-  static from_change_set<T extends object, U extends object = Record<never, never>>(changeSet: MikroOrm.ChangeSet<T>): AuditLog<T, U> {
-    const prev = changeSet.originalEntity;
-    const next = changeSet.payload;
-    const entry = new AuditLog<T, U>();
-    entry.changeType = ChangeType.from_change_set_type(changeSet.type);
-    entry.entityName = changeSet.name;
-    // TODO: proper typings possible?
-    entry.entityId = changeSet.getPrimaryKey(true) as Record<string, unknown>;
-    entry.changes = new ChangeData();
-    for (const prop in next) {
-      const key = prop as MikroOrm.EntityKey<T>;
-      const prevValue = prev?.[key];
-      const nextValue = next[key];
-      if (prevValue !== nextValue) {
-        if (getAuditIgnoreMetadata(changeSet.entity, key)) {
-          continue;
-        }
-        let changeEntryValueTuple: [IChangeValue<typeof prevValue>, IChangeValue<typeof nextValue>] = (
-          () => {
-            if (getAuditRedactMetadata(changeSet.entity, key)) {
-              return [Redacted(prevValue), Redacted(nextValue)];
-            }
-            else {
-              return [Value(prevValue), Value(nextValue)];
-            }
+    @MikroOrm.Property()
+    timestamp: Date = new Date();
+
+    @MikroOrm.ManyToOne(userCls.name)
+    user?: MikroOrm.Ref<U>;
+
+    static from_change_set<T extends object>(changeSet: MikroOrm.ChangeSet<T>): AuditLog<T> {
+      const prev = changeSet.originalEntity;
+      const next = changeSet.payload;
+      const entry = new AuditLog<T>();
+      entry.changeType = ChangeType.from_change_set_type(changeSet.type);
+      entry.entityName = changeSet.name;
+      // TODO: proper typings possible?
+      entry.entityId = changeSet.getPrimaryKey(true) as Record<string, unknown>;
+      entry.changes = new ChangeData();
+      for (const prop in next) {
+        const key = prop as MikroOrm.EntityKey<T>;
+        const prevValue = prev?.[key];
+        const nextValue = next[key];
+        if (prevValue !== nextValue) {
+          if (getAuditIgnoreMetadata(changeSet.entity, key)) {
+            continue;
           }
-        )();
-        entry.changes.data[key] = new ChangeDataEntry(...changeEntryValueTuple);
+          let changeEntryValueTuple: [IChangeValue<typeof prevValue>, IChangeValue<typeof nextValue>] = (
+            () => {
+              if (getAuditRedactMetadata(changeSet.entity, key)) {
+                return [Redacted(prevValue), Redacted(nextValue)];
+              }
+              else {
+                return [Value(prevValue), Value(nextValue)];
+              }
+            }
+          )();
+          entry.changes.data[key] = new ChangeDataEntry(...changeEntryValueTuple);
+        }
       }
+      return entry;
     }
-    return entry;
   }
+  return AuditLog;
 }

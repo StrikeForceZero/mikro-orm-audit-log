@@ -1,38 +1,37 @@
-import { AuditLog } from "@/AuditLog";
 import { Config } from "@/Config";
+import { GlobalStorage } from "@/decorator/Audit";
 import {
   EntityName,
   EventSubscriber,
   FlushEventArgs,
-  Ref,
   ref,
   RequestContext,
 } from "@mikro-orm/core";
 
-export class EntityChangeSubscriber<U extends object = Record<never, never>> implements EventSubscriber<unknown> {
+export class EntityChangeSubscriber<U> implements EventSubscriber<unknown> {
   constructor(
     private readonly config: Config<U>,
-    private readonly entityNames: EntityName<unknown>[]
+    private readonly entityNames: EntityName<unknown>[] = [],
   ) {}
   getSubscribedEntities(): EntityName<unknown>[] {
-    return this.entityNames
+    return [
+      ...Object.keys(GlobalStorage),
+      ...this.entityNames,
+    ];
   }
   async afterFlush(event: FlushEventArgs): Promise<void> {
     let hasChanges = false;
     for (const changeSet of event.uow.getChangeSets()) {
-      if (changeSet.name === AuditLog.name) {
+      if (changeSet.name === this.config.auditLogCls.name) {
         continue;
       }
-      const entry = AuditLog.from_change_set<Partial<unknown>, U>(changeSet);
-      const getUser = this.config.getUser;
-      if (getUser !== undefined) {
-        const context = RequestContext.currentRequestContext();
-        if (context == undefined) {
-          throw new Error("failed to get context");
-        }
-        // TODO: proper typings?
-        entry.user = ref(await getUser(context)) as unknown as U extends Record<never, never> ? never : Ref<U>;
+      const entry = this.config.auditLogCls.from_change_set<Partial<unknown>>(changeSet);
+      const context = RequestContext.currentRequestContext();
+      if (context == undefined) {
+        throw new Error("failed to get context");
       }
+      const getUser = this.config.getUser ?? (_ => ref(new this.config.userCls()));
+      entry.user = await getUser(context);
       event.em.persist(entry);
       hasChanges = true;
     }
