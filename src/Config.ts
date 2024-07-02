@@ -8,11 +8,10 @@ import {
 import {
   Ref,
   RequestContext,
-  sql,
 } from "@mikro-orm/core";
 
-export type UserClass<U> = U extends never ? never : Constructor<U>;
-export type GetUserFn<U> = U extends never ? never : (context: RequestContext) => AsyncOrSync<Ref<U>>;
+export type UserClass<U> = Constructor<U>;
+export type GetUserFn<U> = (context: RequestContext) => AsyncOrSync<Ref<U>>;
 
 export type ConfigParamsBase<U> = {
   auditLogClass: IAuditLogStatic<U>,
@@ -40,7 +39,7 @@ export class Config<U> {
       throw new Error("useJsonB = false not yet supported");
     }
     this.auditLogClass = params.auditLogClass;
-    if (hasExtraProps<ConfigParams<U>, ConfigParamsExt<Exclude<U, never>>>(params, 'userClass')) {
+    if (hasExtraProps<ConfigParams<U>, ConfigParamsExt<U>>(params, 'userClass')) {
       this.userClass = params.userClass;
       this.getUser = params.getUser;
     }

@@ -31,16 +31,14 @@ export class EntityChangeSubscriber<U> implements EventSubscriber<unknown> {
 
       const entry = this.config.auditLogClass.from_change_set<Partial<unknown>, InstanceType<typeof this.config.userClass>>(changeSet);
 
-      if (this.config.hasUserClass() && entry.expectsUser()) {
+      if (this.config.hasUserClass()) {
         if (this.config.getUser) {
           const context = RequestContext.currentRequestContext();
           if (context == undefined) {
             throw new Error("failed to get context");
           }
 
-          // TODO: why is entry not getting type narrowed?
-          entry.user = await this.config.getUser(context) as (InstanceType<UserClass<U>> extends never ? never : Ref<InstanceType<UserClass<U>>>) & Ref<InstanceType<UserClass<U>>>;
-
+          entry.user = await this.config.getUser(context);
         }
       }
       event.em.persist(entry);
