@@ -1,6 +1,8 @@
 import {
+  AuditLogWithoutUser,
   IAuditLogStatic,
 } from "@/AuditLog";
+import { EntityChangeSubscriber } from "@/EntityChangeSubscriber";
 import {
   AsyncOrSync,
   Constructor,
@@ -21,30 +23,54 @@ export type ConfigParamsExt<U> = {
   userClass: UserClass<U>;
   getUser?: GetUserFn<U>,
 };
-export type ConfigParams<U> = U extends never ? ConfigParamsBase<never> & ConfigParamsExt<never> : ConfigParamsBase<U> & ConfigParamsExt<U>;
-
-function hasExtraProps<T extends Record<string, unknown>, Y, P extends keyof Y = keyof Y>(v: T | T & Y, k: P): v is T & Y {
-  return v.hasOwnProperty(k) !== undefined;
-}
 
 export class Config<U> {
   readonly useJsonB: boolean = true;
   readonly auditLogClass: IAuditLogStatic<U>;
-  readonly userClass!: UserClass<U>;
+  private readonly userClass?: UserClass<U>;
   readonly getUser?: GetUserFn<U>;
-  constructor(
-    readonly params: ConfigParams<U>,
+  private constructor(
+    { auditLogClass }: ConfigParamsBase<U>,
+    readonly user_params?: ConfigParamsExt<U>,
   ) {
     if (!this.useJsonB) {
       throw new Error("useJsonB = false not yet supported");
     }
-    this.auditLogClass = params.auditLogClass;
-    if (hasExtraProps<ConfigParams<U>, ConfigParamsExt<U>>(params, 'userClass')) {
-      this.userClass = params.userClass;
-      this.getUser = params.getUser;
+    this.auditLogClass = auditLogClass;
+    if (user_params) {
+      this.userClass = user_params.userClass;
+      this.getUser = user_params.getUser;
     }
   }
-  hasUserClass(this: Config<U>): this is Config<Exclude<U, never>> {
+  getUserClass(): U extends undefined ? never : UserClass<U> {
+    if (!this.userClass) {
+      throw new Error("tried accessing userClass when not initialized");
+    }
+    return this.userClass as U extends undefined ? never : UserClass<U>;
+  }
+  static withUser<T, U extends Exclude<T, undefined>>(params: ConfigParamsBase<U> & ConfigParamsExt<U>): Config<U> {
+    const { auditLogClass, ...rest } = params;
+    return new Config<U>({ auditLogClass }, rest);
+  }
+  static noUser(params: ConfigParamsBase<undefined>): Config<undefined> {
+    const { auditLogClass, ...rest } = params;
+    return new Config<undefined>({ auditLogClass });
+  }
+  hasUserClass(this: Config<U>): this is Config<Exclude<U, undefined>> {
     return this.userClass !== undefined;
   }
 }
+
+const foo = new EntityChangeSubscriber(
+  Config.noUser({
+    auditLogClass: AuditLogWithoutUser,
+  }),
+);
+
+
+const foo2 = new EntityChangeSubscriber(
+  Config.withUser({
+    auditLogClass: AuditLogWithoutUser,
+    userClass: class Foo {},
+  }),
+);

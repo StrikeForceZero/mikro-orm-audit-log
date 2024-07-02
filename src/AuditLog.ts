@@ -1,9 +1,13 @@
+import { Config } from "@/Config";
 import {
   getAuditIgnoreMetadata,
   getAuditRedactMetadata,
 } from "@/decorator";
 import { Constructor } from "@/types";
-import { Entity } from "@mikro-orm/core";
+import {
+  Entity,
+  RequestContext,
+} from "@mikro-orm/core";
 import * as MikroOrm from "@mikro-orm/core";
 
 export enum ChangeType {
@@ -97,7 +101,7 @@ export class ChangeData<T> {
   } = {};
 }
 
-export interface IAuditLogBase<T, U = never> {
+export interface IAuditLogBase<T, U = undefined> {
   id: MikroOrm.UuidType,
   entityName: string,
   entityId: Record<string, unknown> | null,
@@ -105,6 +109,7 @@ export interface IAuditLogBase<T, U = never> {
   changes: ChangeData<T>,
   timestamp: Date,
   user?: MikroOrm.Ref<U>,
+  onAfterFlushBeforeEntryPersist(config: Readonly<Config<U>>, context: RequestContext, entry: this): Promise<void> | void,
 }
 
 export interface IAuditLogStatic<U = never> {
@@ -113,7 +118,7 @@ export interface IAuditLogStatic<U = never> {
 }
 
 @MikroOrm.Entity({ abstract: true })
-abstract class AuditLogBase<T, U = never> implements IAuditLogBase<T, U> {
+abstract class AuditLogBase<T, U = undefined> implements IAuditLogBase<T, U> {
   @MikroOrm.PrimaryKey()
   id!: MikroOrm.UuidType;
 
@@ -135,10 +140,13 @@ abstract class AuditLogBase<T, U = never> implements IAuditLogBase<T, U> {
   @MikroOrm.Property()
   timestamp: Date = new Date();
 
-  static _from_change_set<T, U>(Alc: IAuditLogStatic<U>, changeSet: MikroOrm.ChangeSet<T & {}>): IAuditLogBase<T, U> {
+  // TODO: use DeepReadonly
+  abstract onAfterFlushBeforeEntryPersist(config: Readonly<Config<U>>, context: RequestContext, entry: this): Promise<void> | void;
+
+  static _from_change_set<ALI extends IAuditLogBase<T, U>, ALS extends Constructor<ALI>, T, U>(Alc: ALS, changeSet: MikroOrm.ChangeSet<T & {}>): ALI {
     const prev = changeSet.originalEntity;
     const next = changeSet.payload;
-    const entry = new Alc<T>();
+    const entry = new Alc();
     entry.changeType = ChangeType.from_change_set_type(changeSet.type);
     entry.entityName = changeSet.name;
     // TODO: proper typings possible?
@@ -170,19 +178,33 @@ abstract class AuditLogBase<T, U = never> implements IAuditLogBase<T, U> {
 }
 
 @Entity()
-export class AuditLogWithUser<T, U> extends AuditLogBase<T> {
+export class AuditLogWithUser<T, U extends {}> extends AuditLogBase<T, U> {
   @MikroOrm.ManyToOne()
   user?: MikroOrm.Ref<U>;
 
-  static from_change_set<T, U>(changeSet: MikroOrm.ChangeSet<T & {}>): IAuditLogBase<T, U> {
-    return super._from_change_set<T, U>(AuditLogWithUser<T, U> as IAuditLogStatic<U>, changeSet);
+  public override async onAfterFlushBeforeEntryPersist(config: Readonly<Config<U>>, context: RequestContext, entry: this): Promise<void> {
+    if (!config.hasUserClass()) {
+      throw new Error("userClass not configured in config");
+    }
+    if (!config.getUser) {
+      return;
+    }
+    entry.user = await config.getUser(context);
+  }
+
+  static from_change_set<T, U extends {}>(changeSet: MikroOrm.ChangeSet<T & {}>): AuditLogWithUser<T, U> {
+    return super._from_change_set<InstanceType<Constructor<AuditLogWithUser<T, U>>>, typeof AuditLogWithUser<T, U>, T, U>(AuditLogWithUser<T, U>, changeSet);
   }
 }
 
 @Entity()
 export class AuditLogWithoutUser<T> extends AuditLogBase<T> {
-  static from_change_set<T, U extends never = never>(changeSet: MikroOrm.ChangeSet<T & {}>): IAuditLogBase<T, U> {
-    return super._from_change_set<T, U>(AuditLogWithoutUser<T> as IAuditLogStatic<U>, changeSet);
+  public override onAfterFlushBeforeEntryPersist(_config: Readonly<Config<undefined>>, _context: RequestContext, _entry: this): Promise<void> | void {
+    // do nothing
+  }
+
+  static from_change_set<T, U extends undefined = undefined>(changeSet: MikroOrm.ChangeSet<T & {}>): AuditLogWithoutUser<T> {
+    return super._from_change_set(AuditLogWithoutUser<T>, changeSet);
   }
 }
 
