@@ -1,3 +1,6 @@
+# Directory sometimes created by @mikro-orm/cli tools
+**/temp
+
 ### Node template
 # Logs
 logs
