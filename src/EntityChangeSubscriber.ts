@@ -31,11 +31,17 @@ export class EntityChangeSubscriber<U> implements EventSubscriber<unknown> {
       }
 
       const entry = this.config.auditLogClass.from_change_set<Partial<unknown>>(changeSet);
-      const context = RequestContext.currentRequestContext();
-      if (!context) {
-        throw new Error("failed to get context");
+      if (this.config.hasUserClass()) {
+
+        if (this.config.getUser) {
+          const context = RequestContext.currentRequestContext();
+          if (context == undefined) {
+            throw new Error("failed to get context");
+          }
+
+          entry.user = await this.config.getUser(context);
+        }
       }
-      entry.onAfterFlushBeforeEntryPersist(this.config, context, entry);
 
       event.em.persist(entry);
       hasChanges = true;

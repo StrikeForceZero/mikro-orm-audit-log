@@ -109,7 +109,6 @@ export interface IAuditLogBase<T, U = undefined> {
   changes: ChangeData<T>,
   timestamp: Date,
   user?: MikroOrm.Ref<U>,
-  onAfterFlushBeforeEntryPersist(config: Readonly<Config<U>>, context: RequestContext, entry: this): Promise<void> | void,
 }
 
 export interface IAuditLogStatic<U = never> {
@@ -139,9 +138,6 @@ abstract class AuditLogBase<T, U = undefined> implements IAuditLogBase<T, U> {
 
   @MikroOrm.Property()
   timestamp: Date = new Date();
-
-  // TODO: use DeepReadonly
-  abstract onAfterFlushBeforeEntryPersist(config: Readonly<Config<U>>, context: RequestContext, entry: this): Promise<void> | void;
 
   static _from_change_set<ALI extends IAuditLogBase<T, U>, ALS extends Constructor<ALI>, T, U>(Alc: ALS, changeSet: MikroOrm.ChangeSet<T & {}>): ALI {
     const prev = changeSet.originalEntity;
@@ -182,16 +178,6 @@ export class AuditLogWithUser<T, U extends {}> extends AuditLogBase<T, U> {
   @MikroOrm.ManyToOne()
   user?: MikroOrm.Ref<U>;
 
-  public override async onAfterFlushBeforeEntryPersist(config: Readonly<Config<U>>, context: RequestContext, entry: this): Promise<void> {
-    if (!config.hasUserClass()) {
-      throw new Error("userClass not configured in config");
-    }
-    if (!config.getUser) {
-      return;
-    }
-    entry.user = await config.getUser(context);
-  }
-
   static from_change_set<T, U extends {}>(changeSet: MikroOrm.ChangeSet<T & {}>): AuditLogWithUser<T, U> {
     return super._from_change_set<InstanceType<Constructor<AuditLogWithUser<T, U>>>, typeof AuditLogWithUser<T, U>, T, U>(AuditLogWithUser<T, U>, changeSet);
   }
@@ -199,10 +185,6 @@ export class AuditLogWithUser<T, U extends {}> extends AuditLogBase<T, U> {
 
 @Entity()
 export class AuditLogWithoutUser<T> extends AuditLogBase<T> {
-  public override onAfterFlushBeforeEntryPersist(_config: Readonly<Config<undefined>>, _context: RequestContext, _entry: this): Promise<void> | void {
-    // do nothing
-  }
-
   static from_change_set<T, U extends undefined = undefined>(changeSet: MikroOrm.ChangeSet<T & {}>): AuditLogWithoutUser<T> {
     return super._from_change_set(AuditLogWithoutUser<T>, changeSet);
   }
