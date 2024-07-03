@@ -13,6 +13,7 @@ import {
   RequestContext,
 } from "@mikro-orm/core";
 import * as MikroOrm from "@mikro-orm/core";
+import { v4 } from "uuid";
 
 export enum ChangeType {
   CREATE = "create",
@@ -118,6 +119,7 @@ export interface IAuditLogBase<T extends {}, U = undefined> {
 // FIXME: this is really gross that we need to override IAuditLogBase with C
 export interface IAuditLogStatic<U = never, C extends {} = {},> {
   new<T extends {}>(): OccludeWith<IAuditLogBase<T, U>, C>;
+  id_factory(): string;
   // FIXME: since we can't read the generics from the class definition when calling statics we need to allow them to be specified
   // unfortunately this breaks the compatibility inference between a concrete implementation and the IAuditLogStatic
   // this also might break the inference for entityIda as well?
@@ -148,10 +150,15 @@ abstract class AuditLogBase<T extends {}, U = undefined> implements IAuditLogBas
   @MikroOrm.Property()
   timestamp: Date = new Date();
 
+  static id_factory() {
+    return v4();
+  };
+
   static _from_change_set<ALI extends IAuditLogBase<T, U>, ALS extends OccludeWith<IAuditLogStatic<U>, Constructor<ALI>>, T extends {}, U>(Alc: ALS, changeSet: MikroOrm.ChangeSet<T>): ALI {
     const prev = changeSet.originalEntity;
     const next = changeSet.payload;
     const entry = new Alc();
+    entry.id = Alc.id_factory();
     entry.changeType = ChangeType.from_change_set_type(changeSet.type);
     entry.entityName = changeSet.name;
     entry.entityId = changeSet.getPrimaryKey(true);
@@ -186,6 +193,10 @@ export class AuditLogWithUser<T extends {}, U extends {}> extends AuditLogBase<T
   @MikroOrm.ManyToOne()
   user?: MikroOrm.Ref<U>;
 
+  static override id_factory(): string {
+    return super.id_factory();
+  }
+
   static from_change_set<T extends {}, U extends {}>(changeSet: MikroOrm.ChangeSet<T>): AuditLogWithUser<T, U> {
     // TODO: Why do we need to cast the types when calling _from_change_set but AuditLogWithoutUser doesn't
     return super._from_change_set<AuditLogWithUser<T, U>, typeof AuditLogWithUser<T, U>, T, U>(AuditLogWithUser<T, U>, changeSet);
@@ -194,6 +205,10 @@ export class AuditLogWithUser<T extends {}, U extends {}> extends AuditLogBase<T
 
 @Entity()
 export class AuditLogWithoutUser<T extends {}> extends AuditLogBase<T> {
+  static override id_factory(): string {
+    return super.id_factory();
+  }
+
   static from_change_set<T extends {}, U extends undefined = undefined>(changeSet: MikroOrm.ChangeSet<T>): AuditLogWithoutUser<T> {
     return super._from_change_set(AuditLogWithoutUser<T>, changeSet);
   }
