@@ -103,7 +103,7 @@ export class ChangeData<T extends {}> {
 }
 
 export interface IAuditLogBase<T extends {}, U = undefined> {
-  id: MikroOrm.UuidType,
+  id: string,
   entityName: string,
   entityId: Primary<T> | null,
   changeType: ChangeType,
@@ -119,8 +119,8 @@ export interface IAuditLogStatic<U = never> {
 
 @MikroOrm.Entity({ abstract: true })
 abstract class AuditLogBase<T extends {}, U = undefined> implements IAuditLogBase<T, U> {
-  @MikroOrm.PrimaryKey()
-  id!: MikroOrm.UuidType;
+  @MikroOrm.PrimaryKey({ type: MikroOrm.UuidType })
+  id!: string;
 
   @MikroOrm.Index()
   @MikroOrm.Property()
