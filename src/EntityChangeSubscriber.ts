@@ -20,8 +20,8 @@ export class EntityChangeSubscriber<U> implements EventSubscriber<unknown> {
       ...this.entityNames,
     ];
   }
-  async afterFlush(event: FlushEventArgs): Promise<void> {
-    let hasChanges = false;
+  async beforeFlush(event: FlushEventArgs): Promise<void> {
+    event.uow.computeChangeSets();
     for (const changeSet of event.uow.getChangeSets()) {
       if (changeSet.name === this.config.auditLogClass.name) {
         continue;
@@ -39,12 +39,7 @@ export class EntityChangeSubscriber<U> implements EventSubscriber<unknown> {
           entry.user = await this.config.getUser(context);
         }
       }
-
       event.em.persist(entry);
-      hasChanges = true;
-    }
-    if (hasChanges) {
-      await event.em.flush();
     }
   }
 }
