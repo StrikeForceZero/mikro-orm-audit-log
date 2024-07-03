@@ -1,0 +1,34 @@
+{
+  "name": "author-book",
+  "version": "0.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "run": "ts-node -r tsconfig-paths/register src/index.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "private": true,
+  "mikro-orm": {
+    "useTsNode": true,
+    "tsConfigPath": "./tsconfig.json",
+    "configPaths": [
+      "./mikro-orm.config.ts"
+    ]
+  },
+  "devDependencies": {
+    "@mikro-orm/cli": "^6.2.9",
+    "@mikro-orm/migrations": "^6.2.9",
+    "@mikro-orm/reflection": "^6.2.9",
+    "@types/node": "^20.14.9",
+    "@types/uuid": "^10.0.0",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.5.2"
+  },
+  "dependencies": {
+    "@mikro-orm/core": "^6.2.9",
+    "@mikro-orm/postgresql": "^6.2.9",
+    "mikro-orm-audit-log": "file:../../dist",
+    "uuid": "^10.0.0"
+  }
+}

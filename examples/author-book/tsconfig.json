@@ -4,24 +4,24 @@
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
+    "noEmit": true,
     "esModuleInterop": true,
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "resolveJsonModule": true,
     "isolatedModules": true,
+    "declaration": true,
     "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
     "preserveConstEnums": true,
     "forceConsistentCasingInFileNames": true,
     "noImplicitOverride": true,
     "noImplicitReturns": true,
     "incremental": true,
-    "outDir": "dist",
-    "emitDecoratorMetadata": true,
-    "declaration": true,
     "paths": {
       "@/*": ["./src/*"]
     }
   },
   "include": ["**/*.ts"],
-  "exclude": ["node_modules", "dist", "examples"]
+  "exclude": ["node_modules"]
 }
