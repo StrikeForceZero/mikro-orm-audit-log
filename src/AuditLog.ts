@@ -3,7 +3,10 @@ import {
   getAuditIgnoreMetadata,
   getAuditRedactMetadata,
 } from "@/decorator";
-import { Constructor } from "@/types";
+import {
+  Constructor,
+  OccludeWith,
+} from "@/types";
 import {
   Entity,
   Primary,
@@ -112,9 +115,14 @@ export interface IAuditLogBase<T extends {}, U = undefined> {
   user?: MikroOrm.Ref<U>,
 }
 
-export interface IAuditLogStatic<U = never> {
-  new<T extends {}>(): IAuditLogBase<T, U>;
-  from_change_set<T extends object, U2 = U>(changeSet: MikroOrm.ChangeSet<T>): IAuditLogBase<T, U2>;
+// FIXME: this is really gross that we need to override IAuditLogBase with C
+export interface IAuditLogStatic<U = never, C extends {} = {},> {
+  new<T extends {}>(): OccludeWith<IAuditLogBase<T, U>, C>;
+  // FIXME: since we can't read the generics from the class definition when calling statics we need to allow them to be specified
+  // unfortunately this breaks the compatibility inference between a concrete implementation and the IAuditLogStatic
+  // this also might break the inference for entityIda as well?
+  // and forces us to add the C generic for overriding
+  from_change_set<T extends {}, U2 extends U = U>(changeSet: MikroOrm.ChangeSet<T>): OccludeWith<IAuditLogBase<T, U2>, C>;
 }
 
 @MikroOrm.Entity({ abstract: true })
@@ -140,7 +148,7 @@ abstract class AuditLogBase<T extends {}, U = undefined> implements IAuditLogBas
   @MikroOrm.Property()
   timestamp: Date = new Date();
 
-  static _from_change_set<ALI extends IAuditLogBase<T, U>, ALS extends Constructor<ALI>, T extends {}, U>(Alc: ALS, changeSet: MikroOrm.ChangeSet<T>): ALI {
+  static _from_change_set<ALI extends IAuditLogBase<T, U>, ALS extends OccludeWith<IAuditLogStatic<U>, Constructor<ALI>>, T extends {}, U>(Alc: ALS, changeSet: MikroOrm.ChangeSet<T>): ALI {
     const prev = changeSet.originalEntity;
     const next = changeSet.payload;
     const entry = new Alc();
@@ -179,7 +187,8 @@ export class AuditLogWithUser<T extends {}, U extends {}> extends AuditLogBase<T
   user?: MikroOrm.Ref<U>;
 
   static from_change_set<T extends {}, U extends {}>(changeSet: MikroOrm.ChangeSet<T>): AuditLogWithUser<T, U> {
-    return super._from_change_set<InstanceType<Constructor<AuditLogWithUser<T, U>>>, typeof AuditLogWithUser<T, U>, T, U>(AuditLogWithUser<T, U>, changeSet);
+    // TODO: Why do we need to cast the types when calling _from_change_set but AuditLogWithoutUser doesn't
+    return super._from_change_set<AuditLogWithUser<T, U>, typeof AuditLogWithUser<T, U>, T, U>(AuditLogWithUser<T, U>, changeSet);
   }
 }
 
@@ -190,4 +199,10 @@ export class AuditLogWithoutUser<T extends {}> extends AuditLogBase<T> {
   }
 }
 
-export type AuditLog<U> = IAuditLogStatic<U>;
+export type AuditLog<U> = IAuditLogStatic<U, {}>;
+
+{
+  // ensure static class complies with IAuditLogStatic
+  const _AuditLogWithUser: IAuditLogStatic<{}, AuditLogWithUser<{}, {}>> = AuditLogWithUser<{}, {}>;
+  const _AuditLogWithoutUser: IAuditLogStatic<{}, AuditLogWithoutUser<{}>> = AuditLogWithoutUser<{}>;
+}
