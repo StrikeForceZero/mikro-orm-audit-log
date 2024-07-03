@@ -6,6 +6,7 @@ import {
   Constructor,
   OccludeWith,
 } from "@/types";
+import { entries } from "@/utils";
 import {
   Entity,
   Platform,
@@ -116,6 +117,18 @@ export class ChangeData<T extends {}> {
   } = {};
   hasChanges(): boolean {
     return Object.keys(this.data).length > 0;
+  }
+  prev(): Partial<MikroOrm.EntityDictionary<T>> {
+    return entries(this.data).reduce((o, [key, value]) => {
+      o[key] = this.data[key]?.prev?.value;
+      return o;
+    }, {} as Partial<MikroOrm.EntityDictionary<T>>);
+  }
+  next(): Partial<T> {
+    return entries(this.data).reduce((o, [key, value]) => {
+      o[key] = this.data[key]?.next?.value;
+      return o;
+    }, {} as Partial<MikroOrm.EntityDictionary<T>>);
   }
 }
 
