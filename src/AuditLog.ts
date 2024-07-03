@@ -8,7 +8,9 @@ import {
 } from "@/types";
 import {
   Entity,
+  Platform,
   Primary,
+  Type,
 } from "@mikro-orm/core";
 import * as MikroOrm from "@mikro-orm/core";
 import { v4 } from "uuid";
@@ -117,6 +119,20 @@ export class ChangeData<T extends {}> {
   }
 }
 
+export class ChangeDataType<T extends {}> extends Type<ChangeData<T>, object | string | null> {
+  override convertToDatabaseValue(value: ChangeData<T> | undefined, _platform: Platform): object | string | null {
+    return value ? JSON.stringify(value) : null;
+  }
+
+  override convertToJSValue(value: string | object | null | undefined, _platform: Platform): ChangeData<T> {
+    return value ? Object.assign(new ChangeData(), typeof value === "string" ? JSON.parse(value) : value) : new ChangeData();
+  }
+
+  override getColumnType(_prop: any, _platform: Platform) {
+    return 'jsonb';
+  }
+}
+
 export interface IAuditLogBase<T extends {}, U = undefined> {
   id: string,
   entityName: string,
@@ -155,7 +171,7 @@ abstract class AuditLogBase<T extends {}, U = undefined> implements IAuditLogBas
   @MikroOrm.Enum()
   changeType!: ChangeType;
 
-  @MikroOrm.Property({ type: "jsonb" })
+  @MikroOrm.Property({ type: ChangeDataType<T> })
   changes!: ChangeData<T>;
 
   @MikroOrm.Property()
