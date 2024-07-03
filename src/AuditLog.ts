@@ -6,6 +6,7 @@ import {
 import { Constructor } from "@/types";
 import {
   Entity,
+  Primary,
   RequestContext,
 } from "@mikro-orm/core";
 import * as MikroOrm from "@mikro-orm/core";
@@ -95,16 +96,16 @@ export class ChangeDataEntry<V> {
   }
 }
 
-export class ChangeData<T> {
+export class ChangeData<T extends {}> {
   data: {
     [K in MikroOrm.EntityKey<T>]?: ChangeDataEntry<MikroOrm.EntityData<T>[K]>;
   } = {};
 }
 
-export interface IAuditLogBase<T, U = undefined> {
+export interface IAuditLogBase<T extends {}, U = undefined> {
   id: MikroOrm.UuidType,
   entityName: string,
-  entityId: Record<string, unknown> | null,
+  entityId: Primary<T> | null,
   changeType: ChangeType,
   changes: ChangeData<T>,
   timestamp: Date,
@@ -112,12 +113,12 @@ export interface IAuditLogBase<T, U = undefined> {
 }
 
 export interface IAuditLogStatic<U = never> {
-  new<T>(): IAuditLogBase<T, U>;
+  new<T extends {}>(): IAuditLogBase<T, U>;
   from_change_set<T extends object, U2 = U>(changeSet: MikroOrm.ChangeSet<T>): IAuditLogBase<T, U2>;
 }
 
 @MikroOrm.Entity({ abstract: true })
-abstract class AuditLogBase<T, U = undefined> implements IAuditLogBase<T, U> {
+abstract class AuditLogBase<T extends {}, U = undefined> implements IAuditLogBase<T, U> {
   @MikroOrm.PrimaryKey()
   id!: MikroOrm.UuidType;
 
@@ -127,7 +128,7 @@ abstract class AuditLogBase<T, U = undefined> implements IAuditLogBase<T, U> {
 
   @MikroOrm.Index()
   @MikroOrm.Property({ type: "jsonb" })
-  entityId!: Record<string, unknown> | null;
+  entityId!: Primary<T> | null;
 
   @MikroOrm.Index()
   @MikroOrm.Enum()
@@ -139,14 +140,13 @@ abstract class AuditLogBase<T, U = undefined> implements IAuditLogBase<T, U> {
   @MikroOrm.Property()
   timestamp: Date = new Date();
 
-  static _from_change_set<ALI extends IAuditLogBase<T, U>, ALS extends Constructor<ALI>, T, U>(Alc: ALS, changeSet: MikroOrm.ChangeSet<T & {}>): ALI {
+  static _from_change_set<ALI extends IAuditLogBase<T, U>, ALS extends Constructor<ALI>, T extends {}, U>(Alc: ALS, changeSet: MikroOrm.ChangeSet<T>): ALI {
     const prev = changeSet.originalEntity;
     const next = changeSet.payload;
     const entry = new Alc();
     entry.changeType = ChangeType.from_change_set_type(changeSet.type);
     entry.entityName = changeSet.name;
-    // TODO: proper typings possible?
-    entry.entityId = changeSet.getPrimaryKey(true) as Record<string, unknown>;
+    entry.entityId = changeSet.getPrimaryKey(true);
     entry.changes = new ChangeData();
     for (const prop in next) {
       const key = prop as MikroOrm.EntityKey<T>;
@@ -174,18 +174,18 @@ abstract class AuditLogBase<T, U = undefined> implements IAuditLogBase<T, U> {
 }
 
 @Entity()
-export class AuditLogWithUser<T, U extends {}> extends AuditLogBase<T, U> {
+export class AuditLogWithUser<T extends {}, U extends {}> extends AuditLogBase<T, U> {
   @MikroOrm.ManyToOne()
   user?: MikroOrm.Ref<U>;
 
-  static from_change_set<T, U extends {}>(changeSet: MikroOrm.ChangeSet<T & {}>): AuditLogWithUser<T, U> {
+  static from_change_set<T extends {}, U extends {}>(changeSet: MikroOrm.ChangeSet<T>): AuditLogWithUser<T, U> {
     return super._from_change_set<InstanceType<Constructor<AuditLogWithUser<T, U>>>, typeof AuditLogWithUser<T, U>, T, U>(AuditLogWithUser<T, U>, changeSet);
   }
 }
 
 @Entity()
-export class AuditLogWithoutUser<T> extends AuditLogBase<T> {
-  static from_change_set<T, U extends undefined = undefined>(changeSet: MikroOrm.ChangeSet<T & {}>): AuditLogWithoutUser<T> {
+export class AuditLogWithoutUser<T extends {}> extends AuditLogBase<T> {
+  static from_change_set<T extends {}, U extends undefined = undefined>(changeSet: MikroOrm.ChangeSet<T>): AuditLogWithoutUser<T> {
     return super._from_change_set(AuditLogWithoutUser<T>, changeSet);
   }
 }
