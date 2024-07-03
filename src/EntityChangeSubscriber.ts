@@ -28,6 +28,9 @@ export class EntityChangeSubscriber<U> implements EventSubscriber<unknown> {
       }
 
       const entry = this.config.auditLogClass.from_change_set<Partial<unknown>>(changeSet);
+      if (!entry) {
+        continue;
+      }
       if (this.config.hasUserClass()) {
 
         if (this.config.getUser) {

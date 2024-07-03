@@ -102,6 +102,9 @@ export class ChangeData<T extends {}> {
   data: {
     [K in MikroOrm.EntityKey<T>]?: ChangeDataEntry<MikroOrm.EntityData<T>[K]>;
   } = {};
+  hasChanges(): boolean {
+    return Object.keys(this.data).length > 0;
+  }
 }
 
 export interface IAuditLogBase<T extends {}, U = undefined> {
@@ -122,7 +125,7 @@ export interface IAuditLogStatic<U = never, C extends {} = {},> {
   // unfortunately this breaks the compatibility inference between a concrete implementation and the IAuditLogStatic
   // this also might break the inference for entityIda as well?
   // and forces us to add the C generic for overriding
-  from_change_set<T extends {}, U2 extends U = U>(changeSet: MikroOrm.ChangeSet<T>): OccludeWith<IAuditLogBase<T, U2>, C>;
+  from_change_set<T extends {}, U2 extends U = U>(changeSet: MikroOrm.ChangeSet<T>): OccludeWith<IAuditLogBase<T, U2>, C> | null;
 }
 
 @MikroOrm.Entity({ abstract: true })
@@ -152,7 +155,7 @@ abstract class AuditLogBase<T extends {}, U = undefined> implements IAuditLogBas
     return v4();
   };
 
-  static _from_change_set<ALI extends IAuditLogBase<T, U>, ALS extends OccludeWith<IAuditLogStatic<U>, Constructor<ALI>>, T extends {}, U>(Alc: ALS, changeSet: MikroOrm.ChangeSet<T>): ALI {
+  static _from_change_set<ALI extends IAuditLogBase<T, U>, ALS extends OccludeWith<IAuditLogStatic<U>, Constructor<ALI>>, T extends {}, U>(Alc: ALS, changeSet: MikroOrm.ChangeSet<T>): ALI | null {
     const prev = changeSet.originalEntity;
     const next = changeSet.payload;
     const entry = new Alc();
@@ -182,6 +185,9 @@ abstract class AuditLogBase<T extends {}, U = undefined> implements IAuditLogBas
         entry.changes.data[key] = new ChangeDataEntry(...changeEntryValueTuple);
       }
     }
+    if (!entry.changes.hasChanges()) {
+      return null;
+    }
     return entry;
   }
 }
@@ -195,7 +201,7 @@ export class AuditLogWithUser<T extends {}, U extends {}> extends AuditLogBase<T
     return super.id_factory();
   }
 
-  static from_change_set<T extends {}, U extends {}>(changeSet: MikroOrm.ChangeSet<T>): AuditLogWithUser<T, U> {
+  static from_change_set<T extends {}, U extends {}>(changeSet: MikroOrm.ChangeSet<T>): AuditLogWithUser<T, U> | null {
     // TODO: Why do we need to cast the types when calling _from_change_set but AuditLogWithoutUser doesn't
     return super._from_change_set<AuditLogWithUser<T, U>, typeof AuditLogWithUser<T, U>, T, U>(AuditLogWithUser<T, U>, changeSet);
   }
@@ -207,7 +213,7 @@ export class AuditLogWithoutUser<T extends {}> extends AuditLogBase<T> {
     return super.id_factory();
   }
 
-  static from_change_set<T extends {}, U extends undefined = undefined>(changeSet: MikroOrm.ChangeSet<T>): AuditLogWithoutUser<T> {
+  static from_change_set<T extends {}, U extends undefined = undefined>(changeSet: MikroOrm.ChangeSet<T>): AuditLogWithoutUser<T> | null {
     return super._from_change_set(AuditLogWithoutUser<T>, changeSet);
   }
 }
