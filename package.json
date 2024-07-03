@@ -16,11 +16,13 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "devDependencies": {
+    "@types/uuid": "^10.0.0",
     "tsc-alias": "^1.8.10",
     "typescript": "^5.5.2"
   },
   "dependencies": {
     "@mikro-orm/core": "^6.2.9",
-    "reflect-metadata": "^0.2.2"
+    "reflect-metadata": "^0.2.2",
+    "uuid": "^10.0.0"
   }
 }
