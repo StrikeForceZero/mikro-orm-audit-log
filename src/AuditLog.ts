@@ -41,15 +41,17 @@ export enum ChangeValueMarker {
   Redacted = "redacted",
 }
 
+export interface IChangeValuePojo<V> {
+  marker: ChangeValueMarker,
+  value?: V
+}
+
 export interface IChangeValue<V> {
   marker: ChangeValueMarker;
   value?: V;
-
   toString(): string;
-
   valueOf(): V | undefined;
-
-  toJSON(): string;
+  toJSON(): IChangeValuePojo<V>;
 }
 
 function Value<T>(value: T): IChangeValue<T> {
@@ -62,11 +64,11 @@ function Value<T>(value: T): IChangeValue<T> {
     valueOf(): T | undefined {
       return value;
     },
-    toJSON(): string {
-      return JSON.stringify({
+    toJSON(): IChangeValuePojo<T> {
+      return {
         marker: this.marker,
         value: this.value,
-      });
+      };
     },
   };
 }
@@ -81,11 +83,11 @@ function Redacted<T>(_value: T): IChangeValue<T> {
     valueOf(): T | undefined {
       return undefined;
     },
-    toJSON(): string {
-      return JSON.stringify({
+    toJSON(): IChangeValuePojo<T> {
+      return {
         marker: this.marker,
-        value: this.value,
-      });
+        value: undefined,
+      };
     },
   };
 }
