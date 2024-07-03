@@ -180,17 +180,8 @@ abstract class AuditLogBase<T extends {}, U = undefined> implements IAuditLogBas
         if (getAuditIgnoreMetadata(changeSet.entity, key)) {
           continue;
         }
-        let changeEntryValueTuple: [IChangeValue<typeof prevValue>, IChangeValue<typeof nextValue>] = (
-          () => {
-            if (getAuditRedactMetadata(changeSet.entity, key)) {
-              return [Redacted(prevValue), Redacted(nextValue)];
-            }
-            else {
-              return [Value(prevValue), Value(nextValue)];
-            }
-          }
-        )();
-        entry.changes.data[key] = createChangeDataEntry(...changeEntryValueTuple);
+        const valueWrap = getAuditRedactMetadata(changeSet.entity, key) ? Redacted : Value;
+        entry.changes.data[key] = createChangeDataEntry(valueWrap(prevValue), valueWrap(nextValue));
       }
     }
     if (!entry.changes.hasChanges()) {
