@@ -112,7 +112,7 @@ function createChangeDataEntry<V>(
 
 export class ChangeData<T extends {}> {
   data: {
-    [K in MikroOrm.EntityKey<T>]?: IChangeDataEntry<MikroOrm.EntityData<T>[K]>;
+    [K in MikroOrm.EntityKey<T>]?: IChangeDataEntry<MikroOrm.EntityDictionary<T>[K]>;
   } = {};
   hasChanges(): boolean {
     return Object.keys(this.data).length > 0;
