@@ -92,8 +92,8 @@ function Redacted<T>(_value: T): IChangeValue<T> {
 
 export class ChangeDataEntry<V> {
   constructor(
-    public readonly next?: IChangeValue<V>,
     public readonly prev?: IChangeValue<V>,
+    public readonly next?: IChangeValue<V>,
   ) {
   }
 }
