@@ -90,17 +90,25 @@ function Redacted<T>(_value: T): IChangeValue<T> {
   };
 }
 
-export class ChangeDataEntry<V> {
-  constructor(
-    public readonly prev?: IChangeValue<V>,
-    public readonly next?: IChangeValue<V>,
-  ) {
-  }
+interface IChangeDataEntry<V> {
+  prev?: IChangeValue<V>,
+  next?: IChangeValue<V>,
+}
+
+function createChangeDataEntry<V>(
+    prev?: IChangeValue<V>,
+    next?: IChangeValue<V>,
+  ): IChangeDataEntry<V>
+{
+  return {
+    prev,
+    next,
+  };
 }
 
 export class ChangeData<T extends {}> {
   data: {
-    [K in MikroOrm.EntityKey<T>]?: ChangeDataEntry<MikroOrm.EntityData<T>[K]>;
+    [K in MikroOrm.EntityKey<T>]?: IChangeDataEntry<MikroOrm.EntityData<T>[K]>;
   } = {};
   hasChanges(): boolean {
     return Object.keys(this.data).length > 0;
@@ -182,7 +190,7 @@ abstract class AuditLogBase<T extends {}, U = undefined> implements IAuditLogBas
             }
           }
         )();
-        entry.changes.data[key] = new ChangeDataEntry(...changeEntryValueTuple);
+        entry.changes.data[key] = createChangeDataEntry(...changeEntryValueTuple);
       }
     }
     if (!entry.changes.hasChanges()) {
